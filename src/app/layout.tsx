@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Provider } from "@/components/ui/provider";
+import { Header } from "@/components/header";
+import { getSession } from "@/lib/auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -21,17 +23,21 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const user = await getSession();
   return (
     <html lang="en" suppressHydrationWarning className="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Provider>{children}</Provider>
+        <Provider>
+          <Header user={user} />
+          <main style={{ paddingTop: 112, backgroundColor: "#17181b" }}>{children}</main>
+        </Provider>
       </body>
     </html>
   );

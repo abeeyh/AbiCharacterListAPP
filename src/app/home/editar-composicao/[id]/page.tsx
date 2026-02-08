@@ -9,7 +9,6 @@ export default async function EditarComposicaoIdPage({
   return (
     <MontarComposicao
       compositionId={id}
-      backHref="/home/editar-composicao"
       title="Editar composição"
     />
   );

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import {
   Box,
   Button,
@@ -16,6 +15,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { loginAction } from "@/lib/auth-actions";
+import { toaster } from "@/components/ui/toaster";
 
 export function LoginForm() {
   const router = useRouter();
@@ -32,11 +32,14 @@ export function LoginForm() {
       const result = await loginAction(formData);
       if (result?.error) {
         setError(result.error);
+        toaster.create({ title: result.error, type: "error" });
       } else if (result?.success) {
+        toaster.create({ title: "Entrando...", type: "success" });
         router.push("/home");
       }
     } catch {
       setError("Erro ao entrar. Tente novamente.");
+      toaster.create({ title: "Erro ao entrar", type: "error" });
     } finally {
       setIsLoading(false);
     }
@@ -53,14 +56,6 @@ export function LoginForm() {
       <CardRoot maxW="400px" w="full" size="lg" variant="elevated">
         <CardHeader>
           <Flex direction="column" align="center" gap={4}>
-            <Image
-              src="/icon.png"
-              alt="Abi Character List"
-              width={72}
-              height={72}
-              priority
-              style={{ borderRadius: 12 }}
-            />
             <Heading size="xl">Abi Character List</Heading>
             <Text color="gray.400">
               Entre com seu usuário (nome do jogador) e senha

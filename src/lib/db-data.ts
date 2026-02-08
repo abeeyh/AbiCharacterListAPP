@@ -137,6 +137,7 @@ export async function dbSavePlayer(
       exported_at = EXCLUDED.exported_at,
       updated_at = now()
   `;
+  await sql`DELETE FROM characters WHERE player_id = ${id}`;
   for (const char of data.characters ?? []) {
     await dbSaveCharacter(id, char);
   }

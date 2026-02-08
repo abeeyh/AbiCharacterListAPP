@@ -3,18 +3,17 @@
 import {
   Box,
   Button,
-  CardBody,
-  CardRoot,
   Flex,
   Heading,
   Link,
   Text,
   VStack,
 } from "@chakra-ui/react";
-import Image from "next/image";
 import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { getMembers, deleteMember } from "@/lib/actions";
+import { toaster } from "@/components/ui/toaster";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useEffect, useState } from "react";
 
 export default function EditarMembroPage() {
@@ -39,8 +38,13 @@ export default function EditarMembroPage() {
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (window.confirm("Deletar este membro e todos os personagens?")) {
-      await deleteMember(id);
-      await load();
+      try {
+        await deleteMember(id);
+        await load();
+        toaster.create({ title: "Membro deletado", type: "success" });
+      } catch {
+        toaster.create({ title: "Erro ao deletar", type: "error" });
+      }
     }
   };
 
@@ -52,113 +56,89 @@ export default function EditarMembroPage() {
   };
 
   return (
-    <Flex minH="100vh" direction="column" align="center" bg="gray.900" p={6} gap={6}>
-      <Flex align="center" gap={4} w="full" maxW="700px">
-        <Link asChild color="blue.400" _hover={{ color: "blue.300", textDecoration: "underline" }}>
-          <NextLink href="/home">← Voltar</NextLink>
-        </Link>
-        <Image src="/icon.png" alt="Abi Character List" width={40} height={40} style={{ borderRadius: 8 }} />
-        <Heading size="xl" flex={1}>
-          Editar membro
-        </Heading>
-      </Flex>
+    <Flex flex={1} minH="100%" direction="column" align="center" p={6} gap={6}>
+      <VStack gap={5} align="stretch" maxW="560px" w="full">
+        <Flex justify="space-between" align="center">
+          <Heading size="lg" fontWeight="600">
+            Editar membro
+          </Heading>
+          <Link asChild>
+            <NextLink href="/home/adicionar-membro">
+              <Button size="sm" colorPalette="blue">+ Adicionar</Button>
+            </NextLink>
+          </Link>
+        </Flex>
 
-      <VStack gap={4} align="stretch" maxW="700px" w="full">
         {isLoading ? (
-          <CardRoot bg="gray.800" borderWidth="1px" borderColor="gray.700" borderRadius="xl">
-            <CardBody py={12} textAlign="center">
-              <Text color="gray.500">Carregando...</Text>
-            </CardBody>
-          </CardRoot>
+          <LoadingSkeleton variant="cards" />
         ) : members.length === 0 ? (
-          <CardRoot bg="gray.800" borderWidth="1px" borderColor="gray.700" borderRadius="xl">
-            <CardBody py={12} textAlign="center">
-              <Text fontSize="4xl" mb={4} opacity={0.5}>
-                👤
-              </Text>
-              <Heading size="md" mb={2}>
-                Nenhum membro salvo
-              </Heading>
-              <Text color="gray.500" mb={6}>
-                Adicione um membro primeiro para poder editar
-              </Text>
-              <Link asChild>
-                <NextLink href="/home/adicionar-membro">
-                  <Button colorPalette="blue" size="lg">
-                    Adicionar membro
-                  </Button>
-                </NextLink>
-              </Link>
-            </CardBody>
-          </CardRoot>
+          <Box py={12} textAlign="center">
+            <Text fontSize="4xl" mb={4} opacity={0.5}>
+              👤
+            </Text>
+            <Text fontWeight="600" mb={2}>
+              Nenhum membro salvo
+            </Text>
+            <Text color="gray.500" mb={4} fontSize="sm">
+              Adicione um membro para poder editar
+            </Text>
+            <Link asChild>
+              <NextLink href="/home/adicionar-membro">
+                <Button colorPalette="blue" size="md">Adicionar membro</Button>
+              </NextLink>
+            </Link>
+          </Box>
         ) : (
-          members.map((m) => (
-            <CardRoot
-              key={m.id}
-              bg="gray.800"
-              borderWidth="1px"
-              borderColor="gray.700"
-              borderRadius="xl"
-              cursor="pointer"
-              _hover={{
-                borderColor: "blue.500",
-                transform: "translateY(-2px)",
-                boxShadow: "0 8px 24px -8px rgba(0,0,0,0.4)",
-              }}
-              transition="all 0.2s"
-              onClick={() => router.push(`/home/editar-membro/${m.id}`)}
-            >
-              <CardBody>
-                <Flex justify="space-between" align="center" flexWrap="wrap" gap={4}>
-                  <Flex align="center" gap={4}>
-                    <Flex
-                      w="48px"
-                      h="48px"
-                      align="center"
-                      justify="center"
-                      borderRadius="lg"
-                      bg="gray.700"
-                      fontSize="xl"
-                    >
-                      👤
-                    </Flex>
-                    <Box>
-                      <Text fontWeight="600" fontSize="lg">
-                        {m.playerName || m.realm || "Sem nome"}
+          <VStack gap={2} align="stretch">
+            {members.map((m) => (
+              <Flex
+                key={m.id}
+                align="center"
+                justify="space-between"
+                gap={4}
+                px={4}
+                py={3}
+                borderRadius="md"
+                bg="gray.800"
+                borderWidth="1px"
+                borderColor="gray.700"
+                cursor="pointer"
+                _hover={{ borderColor: "gray.600" }}
+                onClick={() => router.push(`/home/editar-membro/${m.id}`)}
+              >
+                <Box>
+                  <Text fontWeight="600">
+                    {m.playerName || m.realm || "Sem nome"}
+                  </Text>
+                  <Text fontSize="sm" color="gray.500">
+                    {m.characters?.length ?? 0} personagem(ns)
+                    {topIlvl(m) && (
+                      <Text as="span" color="blue.400" ml={2}>
+                        · iLvl {topIlvl(m)}
                       </Text>
-                      <Flex gap={3} mt={1} fontSize="sm" color="gray.500">
-                        <Text>{m.characters?.length ?? 0} personagem(ns)</Text>
-                        {topIlvl(m) && (
-                          <Text color="blue.400">iLvl máx: {topIlvl(m)}</Text>
-                        )}
-                      </Flex>
-                    </Box>
-                  </Flex>
-                  <Flex gap={2}>
-                    <Button
-                      colorPalette="blue"
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/home/editar-membro/${m.id}`);
-                      }}
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      colorPalette="red"
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => handleDelete(e, m.id)}
-                    >
-                      Deletar
-                    </Button>
-                  </Flex>
+                    )}
+                  </Text>
+                </Box>
+                <Flex gap={2} onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => router.push(`/home/editar-membro/${m.id}`)}
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    colorPalette="red"
+                    onClick={(e) => handleDelete(e, m.id)}
+                  >
+                    Deletar
+                  </Button>
                 </Flex>
-              </CardBody>
-            </CardRoot>
-          ))
+              </Flex>
+            ))}
+          </VStack>
         )}
       </VStack>
     </Flex>

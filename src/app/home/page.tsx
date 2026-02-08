@@ -7,35 +7,51 @@ import {
   SimpleGrid,
   Text,
 } from "@chakra-ui/react";
-import Image from "next/image";
 import Link from "next/link";
-import { getSession } from "@/lib/auth";
-import { LogoutButton } from "@/components/logout-button";
+import { getSession, isGmOrAbove } from "@/lib/auth";
 
 const menuItems = [
   {
-    href: "/home/montar-composicao",
-    title: "Montar composição",
-    description: "Crie e organize suas composições de grupo.",
-    icon: "⚔️",
-  },
-  {
-    href: "/home/editar-composicao",
-    title: "Editar composição",
-    description: "Edite composições salvas.",
-    icon: "✏️",
+    href: "/home/meu-perfil",
+    title: "Meu perfil",
+    description: "Gerencie seus personagens, senha e importe dados.",
+    icon: "👤",
+    role: null as string | null,
   },
   {
     href: "/home/adicionar-membro",
     title: "Adicionar membro",
     description: "Adicione novos membros e personagens.",
     icon: "➕",
+    role: "admin" as string | null,
   },
   {
     href: "/home/editar-membro",
     title: "Editar membro",
     description: "Edite membros e personagens salvos.",
     icon: "✏️",
+    role: "admin" as string | null,
+  },
+  {
+    href: "/home/minhas-composicoes",
+    title: "Minhas composições",
+    description: "Veja as composições em que seus personagens estão.",
+    icon: "📋",
+    role: null as string | null,
+  },
+  {
+    href: "/home/montar-composicao",
+    title: "Montar composição",
+    description: "Crie e organize suas composições de grupo.",
+    icon: "⚔️",
+    role: "admin" as string | null,
+  },
+  {
+    href: "/home/editar-composicao",
+    title: "Editar composição",
+    description: "Edite composições salvas.",
+    icon: "✏️",
+    role: "admin" as string | null,
   },
 ];
 
@@ -47,24 +63,18 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default async function HomePage() {
   const user = await getSession();
+  const canManage = isGmOrAbove(user);
+  const visibleItems = menuItems.filter((item) => !item.role || canManage);
   return (
     <Flex
-      minH="100vh"
+      flex={1}
+      minH="100%"
       direction="column"
       align="center"
-      justify="center"
-      bg="gray.900"
       p={6}
       gap={8}
     >
-      <Flex direction="column" align="center" gap={4} mb={4}>
-        <Image
-          src="/icon.png"
-          alt="Abi Character List"
-          width={80}
-          height={80}
-          style={{ borderRadius: 12 }}
-        />
+      <Flex direction="column" align="center" gap={4}>
         <Heading size="xl" fontWeight="bold" textAlign="center">
           Abi Character List
         </Heading>
@@ -89,13 +99,14 @@ export default async function HomePage() {
         )}
       </Flex>
 
+      {visibleItems.length > 0 ? (
       <SimpleGrid
-        columns={2}
+        columns={3}
         gap={5}
-        maxW="640px"
+        maxW="900px"
         w="full"
       >
-        {menuItems.map((item) => (
+        {visibleItems.map((item) => (
           <Link key={item.href} href={item.href} style={{ textDecoration: "none" }}>
             <CardRoot
               cursor="pointer"
@@ -138,10 +149,11 @@ export default async function HomePage() {
           </Link>
         ))}
       </SimpleGrid>
-
-      <Flex mt="auto">
-        <LogoutButton />
-      </Flex>
+      ) : (
+        <Text color="gray.500" fontSize="sm" textAlign="center">
+          Nenhuma opção disponível.
+        </Text>
+      )}
     </Flex>
   );
 }

@@ -22,10 +22,9 @@ import {
 } from "@chakra-ui/react";
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
-import { getMember, getMemberUserRole, saveMember } from "@/lib/actions";
+import { getMyProfile, saveMyProfile } from "@/lib/actions";
 import { toaster } from "@/components/ui/toaster";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
-import type { UserRole } from "@/lib/auth";
 import { type MembroData, type Personagem, generateId, toExportFormat } from "@/lib/types";
 
 const CLASSES = [
@@ -49,34 +48,15 @@ function downloadJson(data: MembroData, filename: string) {
   });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = filename || "membros.json";
+  a.download = filename || "meu-perfil.json";
   a.click();
   URL.revokeObjectURL(a.href);
 }
 
-interface MembroFormProps {
-  memberId?: string;
-  title?: string;
-  onSaved?: () => void;
-  /** Opções de cargo permitidas. Admin: todas; GM: gm, jogador; omitir: apenas jogador. */
-  allowedRoles?: UserRole[];
-}
-
-const ALL_ROLES: { value: UserRole; label: string }[] = [
-  { value: "jogador", label: "Jogador" },
-  { value: "gm", label: "GM" },
-  { value: "admin", label: "Administrador" },
-];
-
-export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFormProps) {
-  const isEdit = Boolean(memberId);
-  const roleOptions = allowedRoles?.length
-    ? ALL_ROLES.filter((r) => allowedRoles.includes(r.value))
-    : [{ value: "jogador" as UserRole, label: "Jogador" }];
+export function PerfilForm() {
   const [playerName, setPlayerName] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [role, setRole] = useState<UserRole>("jogador");
   const [characters, setCharacters] = useState<Personagem[]>([]);
   const [editingCharId, setEditingCharId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Personagem>>({});
@@ -87,28 +67,22 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [noProfile, setNoProfile] = useState(false);
   const [meta, setMeta] = useState<Pick<MembroData, "version" | "addon" | "realm" | "exportedAt">>({});
+  const [memberId, setMemberId] = useState<string>("");
 
   const load = useCallback(async () => {
     setIsLoading(true);
+    setNoProfile(false);
     try {
-      if (memberId) {
-        const [m, userRole] = await Promise.all([
-          getMember(memberId),
-          getMemberUserRole(memberId),
-        ]);
-        if (m) {
-          setPlayerName(m.playerName ?? m.realm ?? "");
-          setCharacters(m.characters || []);
-          setMeta({ version: m.version, addon: m.addon, realm: m.realm, exportedAt: m.exportedAt });
-        }
-        const loadedRole = (userRole as UserRole) ?? "jogador";
-        setRole(allowedRoles?.length && !allowedRoles.includes(loadedRole) ? allowedRoles[0] : loadedRole);
+      const m = await getMyProfile();
+      if (m) {
+        setMemberId(m.id);
+        setPlayerName(m.playerName ?? m.realm ?? "");
+        setCharacters(m.characters || []);
+        setMeta({ version: m.version, addon: m.addon, realm: m.realm, exportedAt: m.exportedAt });
       } else {
-        setPlayerName("");
-        setCharacters([]);
-        setMeta({});
-        setRole(allowedRoles?.[0] ?? "jogador");
+        setNoProfile(true);
       }
       setPassword("");
     } finally {
@@ -116,7 +90,7 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
     }
     setJsonPaste("");
     setError("");
-  }, [memberId, allowedRoles]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -176,7 +150,7 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
   };
 
   const handleSalvar = async () => {
-    if (isSaving) return;
+    if (isSaving || noProfile) return;
     if (!playerName.trim()) {
       setError("Nome do jogador é obrigatório.");
       return;
@@ -189,24 +163,20 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
     setError("");
     setSaveSuccess(false);
     try {
-      await saveMember({
+      const saved = await saveMyProfile({
         id: memberId,
         playerName: playerName.trim(),
         characters,
         password: password.trim() || undefined,
-        role,
         ...meta,
       });
-      setSaveSuccess(true);
-      toaster.create({ title: "Salvo com sucesso", type: "success" });
-      onSaved?.();
-      if (!isEdit) {
-        setPlayerName("");
+      if (saved) {
+        setSaveSuccess(true);
         setPassword("");
-        setRole(allowedRoles?.[0] ?? "jogador");
-        setCharacters([]);
-        setMeta({});
-        setNewChar({ nome: "", realm: "", itemLevel: 0, classe: "" });
+        toaster.create({ title: "Salvo com sucesso", type: "success" });
+      } else {
+        setError("Erro ao salvar.");
+        toaster.create({ title: "Erro ao salvar", type: "error" });
       }
     } catch {
       setError("Erro ao salvar.");
@@ -274,11 +244,24 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
     return <LoadingSkeleton variant="form" />;
   }
 
+  if (noProfile) {
+    return (
+      <Flex flex={1} minH="100%" direction="column" align="center" justify="center" p={6}>
+        <VStack gap={4} maxW="400px" textAlign="center">
+          <Heading size="md">Meu perfil</Heading>
+          <Text color="gray.500">
+            Seu perfil não está vinculado a um jogador. Entre em contato com um administrador ou GM para ser adicionado como membro.
+          </Text>
+        </VStack>
+      </Flex>
+    );
+  }
+
   return (
     <Flex flex={1} minH="100%" direction="column" align="center" p={6} gap={6}>
       <VStack gap={5} align="stretch" maxW="960px" w="full">
         <Heading size="lg" fontWeight="600">
-          {title ?? (isEdit ? "Editar membro" : "Adicionar membro")}
+          Meu perfil
         </Heading>
 
         <VStack gap={4} align="stretch">
@@ -293,7 +276,7 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
           <Flex gap={2} align="center">
             <Input
               type={showPassword ? "text" : "password"}
-              placeholder={isEdit ? "Nova senha (deixe em branco para manter)" : "Senha para login"}
+              placeholder="Nova senha (deixe em branco para manter)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               size="lg"
@@ -311,23 +294,6 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
               {showPassword ? "🙈" : "👁"}
             </Button>
           </Flex>
-          <Box>
-            <Text fontSize="xs" color="gray.500" mb={1}>Cargo</Text>
-            <NativeSelectRoot size="lg" w="full">
-              <NativeSelectField
-                value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-                bg="gray.800"
-                borderColor="gray.600"
-              >
-                {roleOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </NativeSelectField>
-            </NativeSelectRoot>
-          </Box>
         </VStack>
 
         <Collapsible.Root open={jsonOpen} onOpenChange={(e) => setJsonOpen((e as { open: boolean }).open)}>
@@ -351,7 +317,7 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
                 <Button size="sm" onClick={() => jsonPaste.trim() && parseAndImportJson(jsonPaste.trim())}>
                   Importar
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => downloadJson({ id: memberId ?? "", playerName, characters, ...meta }, `${playerName || "membro"}.json`)}>
+                <Button size="sm" variant="outline" onClick={() => downloadJson({ id: memberId, playerName, characters, ...meta }, `meu-perfil.json`)}>
                   Baixar
                 </Button>
               </Flex>
