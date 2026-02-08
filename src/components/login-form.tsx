@@ -47,7 +47,8 @@ export function LoginForm() {
 
   return (
     <Flex
-      minH="100vh"
+      minH="calc(100vh - 112px)"
+      w="full"
       align="center"
       justify="center"
       bg="gray.900"

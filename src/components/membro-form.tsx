@@ -26,7 +26,7 @@ import { getMember, getMemberUserRole, saveMember } from "@/lib/actions";
 import { toaster } from "@/components/ui/toaster";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import type { UserRole } from "@/lib/auth";
-import { type MembroData, type Personagem, generateId, toExportFormat } from "@/lib/types";
+import { type MembroData, type Personagem, generateId, mergeAndValidateCharacters, toExportFormat } from "@/lib/types";
 
 const CLASSES = [
   "Warrior", "Hunter", "Priest", "Mage", "Monk", "Demon Hunter", "Evoker",
@@ -127,40 +127,7 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
     try {
       const raw = JSON.parse(jsonStr) as Record<string, unknown>;
       const chars = Array.isArray(raw.characters) ? raw.characters : [];
-      const CLASS_FILE_TO_NAME: Record<string, string> = {
-        WARRIOR: "Warrior", PALADIN: "Paladin", HUNTER: "Hunter", ROGUE: "Rogue",
-        PRIEST: "Priest", SHAMAN: "Shaman", MAGE: "Mage", WARLOCK: "Warlock",
-        MONK: "Monk", DEMONHUNTER: "Demon Hunter", DRUID: "Druid",
-        DEATHKNIGHT: "Death Knight", EVOKER: "Evoker",
-      };
-      const normalized = (s: string) => String(s ?? "").trim().toLowerCase();
-      setCharacters((prevChars) => {
-        const mapped = chars.map((c: Record<string, unknown>) => {
-          const nome = (c.nome ?? c.name ?? "") as string;
-          const itemLevel = Number(c.ilvl ?? c.itemLevel ?? 0);
-          const realm = (c.realm ?? "") as string;
-          const classeFromJson = (c.classe ?? "") as string;
-          const classeFromFile = (c.class ?? "") as string;
-          const classe = classeFromJson || (classeFromFile && CLASS_FILE_TO_NAME[classeFromFile as string]) || "";
-          const imported: Personagem = {
-            ...c,
-            id: (c.id as string) || generateId(),
-            nome,
-            realm,
-            itemLevel,
-            classe: classe || undefined,
-          } as Personagem;
-          const existing = prevChars.find(
-            (e) => normalized(e.nome) === normalized(nome) && normalized(e.realm) === normalized(realm)
-          );
-          if (existing) {
-            imported.saved_mythic = existing.saved_mythic;
-            imported.saved_heroic = existing.saved_heroic;
-          }
-          return imported;
-        });
-        return mapped;
-      });
+      setCharacters((prevChars) => mergeAndValidateCharacters(prevChars, chars));
       setJsonPaste("");
       if (typeof raw.version === "number" && (raw.addon === "AbiCharacterList" || raw.addon === "AlterEgo")) {
         setMeta({
