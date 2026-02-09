@@ -63,13 +63,13 @@ export function Header({ user }: { user: User }) {
             <HStack gap={3}>
             <Image
               src="/icon.png"
-              alt="Abi Character List"
+              alt="Hollywood Purple Filter"
               width={40}
               height={40}
               style={{ borderRadius: 8 }}
             />
             <Heading size="md" fontWeight="bold" color="white">
-              Abi Character List
+              Hollywood Purple Filter
             </Heading>
             </HStack>
           </Link>

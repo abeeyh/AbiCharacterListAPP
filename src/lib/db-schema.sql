@@ -1,4 +1,4 @@
--- Schema para ABI Character List
+-- Schema para Hollywood Purple Filter
 -- Users (auth), Players, Characters, Compositions (mythic/heroic)
 -- Reset semanal: terça 12:00 horário do Brasil
 

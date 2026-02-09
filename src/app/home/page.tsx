@@ -76,7 +76,7 @@ export default async function HomePage() {
     >
       <Flex direction="column" align="center" gap={4}>
         <Heading size="xl" fontWeight="bold" textAlign="center">
-          Abi Character List
+          Hollywood Purple Filter
         </Heading>
         <Text color="gray.500" fontSize="sm" textAlign="center">
           Gerencie seus personagens e composições

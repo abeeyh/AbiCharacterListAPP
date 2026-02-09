@@ -57,9 +57,32 @@ const CLASS_FILE_TO_NAME: Record<string, string> = {
   DEATHKNIGHT: "Death Knight", EVOKER: "Evoker",
 };
 
+/** Nomes de classe em português -> inglês. Valida e salva sempre em inglês. */
+const CLASS_PT_TO_EN: Record<string, string> = {
+  guerreiro: "Warrior", guerreira: "Warrior", paladino: "Paladin", paladina: "Paladin",
+  caçador: "Hunter", caçadora: "Hunter", cacador: "Hunter", cacadora: "Hunter",
+  ladino: "Rogue", ladina: "Rogue", sacerdote: "Priest", sacerdotisa: "Priest",
+  xamã: "Shaman", xama: "Shaman", mago: "Mage", maga: "Mage",
+  bruxo: "Warlock", bruxa: "Warlock", monge: "Monk", monja: "Monk",
+  "caçador de demônios": "Demon Hunter", "caçadora de demônios": "Demon Hunter",
+  "cacador de demonios": "Demon Hunter", druida: "Druid", druide: "Druid",
+  "cavaleiro da morte": "Death Knight", "cavaleira da morte": "Death Knight",
+  evocador: "Evoker", evocadora: "Evoker",
+};
+
 /** Normaliza string para comparação (nome+realm). */
 function normalized(s: string): string {
   return String(s ?? "").trim().toLowerCase();
+}
+
+/** Converte classe em português para inglês. Retorna a string original se já estiver em inglês. */
+function normalizeClassToEnglish(classe: string): string | undefined {
+  const s = String(classe ?? "").trim();
+  if (!s) return undefined;
+  const lower = s.toLowerCase();
+  if (CLASS_PT_TO_EN[lower]) return CLASS_PT_TO_EN[lower];
+  if (CLASS_FILE_TO_NAME[s.toUpperCase().replace(/\s/g, "")]) return CLASS_FILE_TO_NAME[s.toUpperCase().replace(/\s/g, "")];
+  return s; // já em inglês ou desconhecido
 }
 
 /**
@@ -88,7 +111,8 @@ export function mergeAndValidateCharacters(
     const itemLevel = Number(obj.ilvl ?? obj.itemLevel ?? 0);
     const classeFromJson = (obj.classe ?? "") as string;
     const classeFromFile = (obj.class ?? "") as string;
-    const classe = classeFromJson || (classeFromFile && CLASS_FILE_TO_NAME[classeFromFile as string]) || undefined;
+    const classeRaw = classeFromJson || (classeFromFile && CLASS_FILE_TO_NAME[classeFromFile as string]) || "";
+    const classe = normalizeClassToEnglish(classeRaw) || undefined;
 
     const imported: Personagem = {
       ...obj,

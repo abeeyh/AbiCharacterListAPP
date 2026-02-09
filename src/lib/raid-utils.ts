@@ -18,24 +18,23 @@ export const LUST: RaidUtility = {
 export const BATTLE_REZ: RaidUtility = {
   id: "battle_rez",
   name: "Battle Rez",
-  classes: ["Druid", "Death Knight", "Warlock", "Monk", "Evoker"],
+  classes: ["Druid", "Death Knight", "Warlock", "Evoker"],
 };
 
 export const RAID_BUFFS: RaidUtility[] = [
-  { id: "stamina", name: "Stamina (Fortitude)", classes: ["Priest"] },
-  { id: "intellect", name: "Intellect", classes: ["Mage"] },
-  { id: "attack_power", name: "Attack Power", classes: ["Warrior", "Paladin", "Hunter"] },
-  { id: "haste", name: "Haste (Windfury)", classes: ["Shaman"] },
+  { id: "arcane_intellect", name: "Arcane Intellect", classes: ["Mage"] },
   { id: "mark_of_wild", name: "Mark of the Wild", classes: ["Druid"] },
-  { id: "versatility", name: "Versatility", classes: ["Monk"] },
-  { id: "critical_strike", name: "Critical Strike", classes: ["Mage", "Hunter"] },
-  { id: "mastery", name: "Mastery", classes: ["Shaman"] },
+  { id: "close_to_heart", name: "Close to Heart", classes: ["Monk"] },
+  { id: "devotion_aura", name: "Devotion Aura", classes: ["Paladin"] },
+  { id: "power_infusion", name: "Power Infusion", classes: ["Priest"] },
+  { id: "prayer_of_fortitude", name: "Prayer of Fortitude", classes: ["Priest"] },
+  { id: "windfury_totem", name: "Windfury Totem", classes: ["Shaman"] },
+  { id: "battle_shout", name: "Battle Shout", classes: ["Warrior"] },
 ];
 
 export const RAID_DEBUFFS: RaidUtility[] = [
-  { id: "mystic_touch", name: "Mystic Touch (Físico +5%)", classes: ["Monk"] },
-  { id: "chaos_brand", name: "Chaos Brand (Mágico +5%)", classes: ["Warlock", "Demon Hunter"] },
-  { id: "mortal_wounds", name: "Mortal Wounds (Heal redução)", classes: ["Warrior", "Rogue", "Hunter", "Demon Hunter"] },
+  { id: "chaos_brand", name: "Chaos Brand", classes: ["Demon Hunter"] },
+  { id: "hunters_mark", name: "Hunter's Mark", classes: ["Hunter"] },
 ];
 
 export function getClassesInComposition(

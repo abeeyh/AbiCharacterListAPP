@@ -57,7 +57,7 @@ export function LoginForm() {
       <CardRoot maxW="400px" w="full" size="lg" variant="elevated">
         <CardHeader>
           <Flex direction="column" align="center" gap={4}>
-            <Heading size="xl">Abi Character List</Heading>
+            <Heading size="xl">Hollywood Purple Filter</Heading>
             <Text color="gray.400">
               Entre com seu usuário (nome do jogador) e senha
             </Text>

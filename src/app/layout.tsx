@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Abi Character List",
-  description: "Abi Character List - Lista de personagens",
+  title: "Hollywood Purple Filter",
+  description: "Hollywood Purple Filter - Lista de personagens",
   icons: {
     icon: "/icon.png",
   },
