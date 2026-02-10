@@ -41,6 +41,23 @@ export default function EditarComposicaoPage() {
   const filledCount = (comp: { slots: unknown[] }) =>
     comp.slots?.filter(Boolean).length ?? 0;
 
+  const formatScheduled = (scheduledAt?: string) => {
+    if (!scheduledAt) return null;
+    try {
+      const d = new Date(scheduledAt);
+      if (isNaN(d.getTime())) return null;
+      return d.toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return null;
+    }
+  };
+
   const { mythic, heroic } = useMemo(() => {
     const m = compositions.filter((c) => c.type === "mythic" || !c.type);
     const h = compositions.filter((c) => c.type === "heroic");
@@ -101,6 +118,11 @@ export default function EditarComposicaoPage() {
             <Text fontWeight="600" fontSize="md" truncate title={c.name || "Sem nome"}>
               {c.name || "Sem nome"}
             </Text>
+            {formatScheduled((c as { scheduledAt?: string }).scheduledAt) && (
+              <Text fontSize="xs" color="gray.500" mt={0.5}>
+                📅 {formatScheduled((c as { scheduledAt?: string }).scheduledAt)}
+              </Text>
+            )}
           </Box>
           <Flex gap={1} flexShrink={0} onClick={(e) => e.stopPropagation()}>
             <Button

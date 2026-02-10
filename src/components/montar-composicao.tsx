@@ -39,19 +39,10 @@ import { LoadingSkeleton } from "@/components/loading-skeleton";
 
 const SLOT_SIZE = { minH: "52px", h: "52px", flexShrink: 0 };
 
-/** Por classe: primeiro = Main, segundo = Alt 1, terceiro = Alt 2, etc. */
-function getMainAltLabel(member: MembroData, char: Personagem): string {
-  const chars = member.characters ?? [];
-  const cls = char.classe ?? "Sem classe";
-  let sameClassIndex = 0;
-  for (const c of chars) {
-    if ((c.classe ?? "Sem classe") === cls) {
-      if (c.id === char.id) {
-        return sameClassIndex === 0 ? "Main" : `Alt ${sameClassIndex}`;
-      }
-      sameClassIndex++;
-    }
-  }
+/** Retorna Main ou Alt N conforme salvo no personagem. Vazio se não definido. */
+function getMainAltLabel(char: Personagem): string {
+  if (char.isMain) return "Main";
+  if (char.altNumber && char.altNumber >= 1) return `Alt ${char.altNumber}`;
   return "";
 }
 
@@ -97,6 +88,7 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
   const [compositions, setCompositions] = useState<Awaited<ReturnType<typeof getCompositions>>>([]);
   const [name, setName] = useState("");
   const [compositionType, setCompositionType] = useState<CompositionType>("mythic");
+  const [scheduledAt, setScheduledAt] = useState("");
   const [slots, setSlots] = useState<(SlotChar | null)[]>(Array(20).fill(null));
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -120,11 +112,29 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
           setName(comp.name);
           setCompositionType((comp.type === "mythic" || comp.type === "heroic" ? comp.type : "mythic") as CompositionType);
           setSlots(comp.slots);
+          setScheduledAt(
+            comp.scheduledAt
+              ? (() => {
+                  const d = new Date(comp.scheduledAt);
+                  if (isNaN(d.getTime())) return "";
+                  const min = Math.round(d.getMinutes() / 15) * 15;
+                  if (min === 60) {
+                    d.setHours(d.getHours() + 1);
+                    d.setMinutes(0);
+                  } else {
+                    d.setMinutes(min);
+                  }
+                  const pad = (n: number) => String(n).padStart(2, "0");
+                  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                })()
+              : ""
+          );
         }
       } else {
         setName("");
         setCompositionType("mythic");
         setSlots(Array(20).fill(null));
+        setScheduledAt("");
       }
     } finally {
       setIsLoading(false);
@@ -178,8 +188,11 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
   const availableMembersForSlot = (excludeSlotIndex: number) => {
     const usedMemberIds = new Set<string>();
     for (let i = 0; i < slots.length; i++) {
-      if (i !== excludeSlotIndex && slots[i]?.memberId) {
+      if (i === excludeSlotIndex) continue;
+      if (slots[i]?.memberId) {
         usedMemberIds.add(slots[i]!.memberId);
+      } else if (selectedPlayerBySlot[i]) {
+        usedMemberIds.add(selectedPlayerBySlot[i]!);
       }
     }
     return members.filter((m) => {
@@ -193,7 +206,32 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
     setIsSaving(true);
     setSaveSuccess(false);
     try {
-      const saved = await persistComposition({ id: compositionId, name, type: compositionType, slots });
+      let finalName = name.trim();
+      if (!finalName) {
+        const d = scheduledAt.trim() ? new Date(scheduledAt) : new Date();
+        const days = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+        finalName = days[d.getDay()];
+      }
+      let finalScheduledAt = scheduledAt.trim() || undefined;
+      if (finalScheduledAt) {
+        const d = new Date(finalScheduledAt);
+        const min = Math.round(d.getMinutes() / 15) * 15;
+        if (min === 60) {
+          d.setHours(d.getHours() + 1);
+          d.setMinutes(0);
+        } else {
+          d.setMinutes(min);
+        }
+        const pad = (n: number) => String(n).padStart(2, "0");
+        finalScheduledAt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }
+      const saved = await persistComposition({
+        id: compositionId,
+        name: finalName,
+        type: compositionType,
+        slots,
+        scheduledAt: finalScheduledAt,
+      });
       setSaveSuccess(true);
       toaster.create({ title: "Salvo com sucesso", type: "success" });
       router.push(`/home/editar-composicao/${saved.id}`);
@@ -241,6 +279,12 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
     setSelectedPlayerBySlot((prev) => {
       const p = { ...prev };
       delete p[slotIndex];
+      for (const i of Object.keys(p)) {
+        const idx = Number(i);
+        if (p[idx] === memberId && !slots[idx]) {
+          delete p[idx];
+        }
+      }
       return p;
     });
   };
@@ -298,8 +342,7 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
   const renderSlot = (slot: SlotChar | null, i: number) => {
     const isDropTarget = dragOverIndex === i;
     const slotContent = slot ? (() => {
-      const slotMember = members.find((m) => m.id === slot.memberId);
-      const mainAlt = slotMember ? getMainAltLabel(slotMember, slot.char) : "";
+      const mainAlt = getMainAltLabel(slot.char);
       const color = (slot.char.classe && CLASS_COLORS[slot.char.classe]) || "#ccc";
       const hasClassIcon = slot.char.classe && CLASS_ICONS[slot.char.classe];
       return (
@@ -332,7 +375,7 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
           <Box flex={1} minW={0}>
             <Flex align="center" gap={2} wrap="nowrap" minW={0}>
               <Text fontWeight="600" truncate style={{ color }}>
-                {slot.playerName} — {mainAlt}
+                {slot.playerName}{mainAlt ? ` — ${mainAlt}` : ""}
               </Text>
               {isHeroic && (
                 <Badge
@@ -411,11 +454,14 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
               border="none"
             >
               <option value="">— Personagem —</option>
-              {charOptions.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.classe ?? "?"} — {selMember ? getMainAltLabel(selMember, c) : ""}
-                </option>
-              ))}
+              {charOptions.map((c) => {
+                const mainAltLabel = getMainAltLabel(c);
+                return (
+                  <option key={c.id} value={c.id}>
+                    {c.classe ?? "?"}{mainAltLabel ? ` — ${mainAltLabel}` : ""}
+                  </option>
+                );
+              })}
             </NativeSelectField>
           </NativeSelectRoot>
         </Flex>
@@ -563,6 +609,70 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
                 <option value="heroic">Heroic</option>
               </NativeSelectField>
             </NativeSelectRoot>
+          </Box>
+          <Box>
+            <Text fontSize="xs" color="gray.500" mb={1}>Data e hora</Text>
+            <Flex gap={2} align="center">
+              <Input
+                type="date"
+                value={scheduledAt ? scheduledAt.slice(0, 10) : ""}
+                onChange={(e) => {
+                  const datePart = e.target.value;
+                  const [h, m] = scheduledAt ? [scheduledAt.slice(11, 13), scheduledAt.slice(14, 16)] : ["00", "00"];
+                  setScheduledAt(datePart ? `${datePart}T${h}:${m}` : "");
+                }}
+                size="md"
+                w="140px"
+                bg="gray.800"
+                borderColor="gray.600"
+                style={{ colorScheme: "dark" }}
+              />
+              <NativeSelectRoot size="md" w="72px">
+                <NativeSelectField
+                  value={scheduledAt ? scheduledAt.slice(11, 13) : "00"}
+                  onChange={(e) => {
+                    const h = e.target.value;
+                    const datePart = scheduledAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+                    const m = (scheduledAt?.slice(14, 16) || "00").replace(/[^0-9]/g, "");
+                    const mNorm = ["00", "15", "30", "45"].includes(m) ? m : "00";
+                    setScheduledAt(`${datePart}T${h}:${mNorm}`);
+                  }}
+                  bg="gray.800"
+                  borderColor="gray.600"
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={String(i).padStart(2, "0")}>
+                      {String(i).padStart(2, "0")}h
+                    </option>
+                  ))}
+                </NativeSelectField>
+              </NativeSelectRoot>
+              <NativeSelectRoot size="md" w="72px">
+                <NativeSelectField
+                  value={
+                    scheduledAt
+                      ? (() => {
+                          const m = scheduledAt.slice(14, 16);
+                          return ["00", "15", "30", "45"].includes(m) ? m : "00";
+                        })()
+                      : "00"
+                  }
+                  onChange={(e) => {
+                    const m = e.target.value;
+                    const datePart = scheduledAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+                    const h = scheduledAt?.slice(11, 13) ?? "00";
+                    setScheduledAt(`${datePart}T${h}:${m}`);
+                  }}
+                  bg="gray.800"
+                  borderColor="gray.600"
+                >
+                  <option value="00">:00</option>
+                  <option value="15">:15</option>
+                  <option value="30">:30</option>
+                  <option value="45">:45</option>
+                </NativeSelectField>
+              </NativeSelectRoot>
+            </Flex>
           </Box>
         </Flex>
 

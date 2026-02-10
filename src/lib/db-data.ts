@@ -137,9 +137,15 @@ export async function dbSavePlayer(
       exported_at = EXCLUDED.exported_at,
       updated_at = now()
   `;
-  await sql`DELETE FROM characters WHERE player_id = ${id}`;
+  const charsToKeep = new Set((data.characters ?? []).map((c) => c.id).filter(Boolean));
   for (const char of data.characters ?? []) {
     await dbSaveCharacter(id, char);
+  }
+  const existing = await sql`SELECT id FROM characters WHERE player_id = ${id}`;
+  for (const row of existing as { id: string }[]) {
+    if (!charsToKeep.has(row.id)) {
+      await sql`DELETE FROM characters WHERE id = ${row.id}`;
+    }
   }
   const saved = await dbGetPlayer(id);
   if (!saved) throw new Error("Falha ao salvar player");
@@ -208,7 +214,7 @@ export async function dbSaveCharacter(
 
 export async function dbListCompositions(): Promise<CompositionData[]> {
   const comps = await sql`
-    SELECT id, name, type, last_reset_at FROM compositions ORDER BY name
+    SELECT id, name, type, last_reset_at, scheduled_at FROM compositions ORDER BY name
   `;
   const result: CompositionData[] = [];
   for (const c of comps as any[]) {
@@ -222,7 +228,7 @@ export async function dbGetComposition(
   id: string
 ): Promise<CompositionData | null> {
   const compRows = await sql`
-    SELECT id, name, type, last_reset_at FROM compositions WHERE id = ${id}
+    SELECT id, name, type, last_reset_at, scheduled_at FROM compositions WHERE id = ${id}
   `;
   const comp = (compRows as any[])[0];
   if (!comp) return null;
@@ -282,12 +288,17 @@ export async function dbGetComposition(
     }
   }
 
+  const scheduledAt = comp.scheduled_at != null
+    ? (comp.scheduled_at instanceof Date ? comp.scheduled_at.toISOString() : String(comp.scheduled_at))
+    : undefined;
+
   return {
     id: comp.id,
     name: comp.name,
     type: (comp.type ?? "mythic") as CompositionType,
     slots,
     lastResetAt,
+    scheduledAt: scheduledAt ?? undefined,
   };
 }
 
@@ -304,12 +315,15 @@ export async function dbSaveComposition(
   const prev = (existing as any[])[0];
   const lastResetAt = prev ? Number(prev.last_reset_at) : lastTuesday12;
 
+  const scheduledAt = (data as any).scheduledAt ?? null;
+
   await sql`
-    INSERT INTO compositions (id, name, type, last_reset_at, updated_at)
-    VALUES (${id}, ${data.name}, ${type}, ${lastResetAt}, now())
+    INSERT INTO compositions (id, name, type, last_reset_at, scheduled_at, updated_at)
+    VALUES (${id}, ${data.name}, ${type}, ${lastResetAt}, ${scheduledAt ? new Date(scheduledAt) : null}, now())
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
       type = EXCLUDED.type,
+      scheduled_at = EXCLUDED.scheduled_at,
       updated_at = now()
   `;
 
@@ -341,6 +355,8 @@ export async function dbSaveComposition(
       realm: char.realm,
       itemLevel: char.itemLevel,
       classe: char.classe,
+      isMain: (char as any).isMain,
+      altNumber: (char as any).altNumber,
       vault: char.vault,
       raids: char.raids,
     };

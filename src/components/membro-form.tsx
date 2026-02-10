@@ -208,9 +208,17 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
 
   const handleSaveAlter = () => {
     if (!editingCharId) return;
-    setCharacters((prev) =>
-      prev.map((c) => (c.id === editingCharId ? { ...c, ...editForm } : c))
-    );
+    setCharacters((prev) => {
+      const base = prev.find((c) => c.id === editingCharId);
+      if (!base) return prev;
+      const merged = { ...base, ...editForm };
+      return prev.map((c) => {
+        if (c.id === editingCharId) return merged;
+        if (merged.isMain && c.isMain) return { ...c, isMain: false, altNumber: undefined };
+        if (merged.altNumber != null && c.altNumber === merged.altNumber) return { ...c, altNumber: undefined };
+        return c;
+      });
+    });
     setEditingCharId(null);
     setEditForm({});
   };
@@ -225,17 +233,25 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
 
   const handleSetMainAlt = (charId: string, value: string) => {
     setCharacters((prev) => {
-      const updated = prev.map((c) => {
-        if (c.id !== charId) {
-          if (value === "main") return { ...c, isMain: false, altNumber: undefined };
-          return c;
+      return prev.map((c) => {
+        if (c.id === charId) {
+          if (value === "main") return { ...c, isMain: true, altNumber: undefined };
+          if (value === "") return { ...c, isMain: undefined, altNumber: undefined };
+          const num = parseInt(value, 10);
+          return { ...c, isMain: false, altNumber: Number.isFinite(num) ? num : undefined };
         }
-        if (value === "main") return { ...c, isMain: true, altNumber: undefined };
-        if (value === "") return { ...c, isMain: undefined, altNumber: undefined };
-        const num = parseInt(value, 10);
-        return { ...c, isMain: false, altNumber: Number.isFinite(num) ? num : undefined };
+        // Só ajusta os outros se houver conflito
+        if (value === "main") {
+          return c.isMain ? { ...c, isMain: false, altNumber: undefined } : c;
+        }
+        if (value !== "") {
+          const num = parseInt(value, 10);
+          if (Number.isFinite(num) && c.altNumber === num) {
+            return { ...c, altNumber: undefined };
+          }
+        }
+        return c;
       });
-      return updated;
     });
   };
 

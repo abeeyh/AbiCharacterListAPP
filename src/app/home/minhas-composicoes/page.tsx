@@ -19,6 +19,23 @@ import type { CompositionData, SlotChar } from "@/lib/types";
 const filledCount = (comp: { slots: unknown[] }) =>
   comp.slots?.filter(Boolean).length ?? 0;
 
+const formatScheduled = (scheduledAt?: string) => {
+  if (!scheduledAt) return null;
+  try {
+    const d = new Date(scheduledAt);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return null;
+  }
+};
+
 export default function MinhasComposicoesPage() {
   const router = useRouter();
   const [compositions, setCompositions] = useState<CompositionData[]>([]);
@@ -88,6 +105,11 @@ export default function MinhasComposicoesPage() {
           <Text fontWeight="600" fontSize="md" truncate title={c.name || "Sem nome"}>
             {c.name || "Sem nome"}
           </Text>
+          {formatScheduled(c.scheduledAt) && (
+            <Text fontSize="xs" color="gray.500" mt={0.5}>
+              📅 {formatScheduled(c.scheduledAt)}
+            </Text>
+          )}
           {mySlots.length > 0 && (
             <Text fontSize="xs" color="blue.400" mt={2}>
               Seus personagens: {mySlots.map((s) => `${s.char.classe ?? "?"} — ${s.char.nome}`).join(", ")}

@@ -42,6 +42,8 @@ export interface CompositionData {
   type?: CompositionType;
   slots: (SlotChar | null)[];
   lastResetAt?: number;
+  /** Data e hora agendada (ISO string) */
+  scheduledAt?: string;
 }
 
 export interface MembroData {

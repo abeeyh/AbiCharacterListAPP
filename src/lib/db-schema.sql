@@ -39,9 +39,13 @@ CREATE TABLE IF NOT EXISTS compositions (
   name TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('mythic', 'heroic')),
   last_reset_at BIGINT NOT NULL,
+  scheduled_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Migration: adiciona coluna scheduled_at se não existir (bancos antigos)
+ALTER TABLE compositions ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;
 
 -- Slots da composição (20 slots: índices 0-19)
 -- Mythic: personagem não pode repetir na mesma semana (único por composition)
