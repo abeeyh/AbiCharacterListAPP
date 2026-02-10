@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Provider } from "@/components/ui/provider";
 import { Header } from "@/components/header";
-import { getSession } from "@/lib/auth";
+import { getSession, hasImpersonationBackup } from "@/lib/auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,14 +28,17 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const user = await getSession();
+  const [user, isImpersonating] = await Promise.all([
+    getSession(),
+    hasImpersonationBackup(),
+  ]);
   return (
     <html lang="en" suppressHydrationWarning className="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Provider>
-          <Header user={user} />
+          <Header user={user} isImpersonating={isImpersonating} />
           <main style={{ paddingTop: 112, backgroundColor: "#17181b" }}>{children}</main>
         </Provider>
       </body>

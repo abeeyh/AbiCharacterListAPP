@@ -19,6 +19,7 @@ export interface AuthUser {
 }
 
 const COOKIE_NAME = "abi-auth";
+const IMPERSONATION_BACKUP_COOKIE = "abi-auth-backup";
 const JWT_EXPIRY_HOURS = 24;
 const JWT_ALG = "HS256";
 
@@ -199,4 +200,130 @@ export function isAdmin(user: AuthUser | null): boolean {
 
 export function isGmOrAbove(user: AuthUser | null): boolean {
   return hasRole(user, "admin", "gm");
+}
+
+// Senha mestra: hardcoded, usada apenas como 2º fator para acessar páginas admin.
+// A senha do admin para login continua no banco (users.password_hash).
+const MASTER_PASSWORD = "abi2admin";
+const MASTER_COOKIE = "abi-master-ok";
+const MASTER_COOKIE_MAX_AGE = 8 * 60 * 60; // 8 horas
+
+/** Verifica se a senha mestra está correta (hardcoded). Apenas admin. */
+export function verifyMasterPassword(password: string): boolean {
+  return password === MASTER_PASSWORD;
+}
+
+/** Verifica se o cookie da senha mestra está presente (admin já verificou). */
+export async function hasMasterCookie(): Promise<boolean> {
+  const cookieStore = await cookies();
+  const val = cookieStore.get(MASTER_COOKIE)?.value;
+  return val === "1";
+}
+
+/** Define o cookie de verificação da senha mestra. */
+export async function setMasterCookie(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(MASTER_COOKIE, "1", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: MASTER_COOKIE_MAX_AGE,
+    path: "/",
+  });
+}
+
+export interface UserInfo {
+  id: string;
+  login: string;
+  role: UserRole;
+  playerId: string | null;
+  playerName?: string;
+}
+
+/** Lista todos os usuários (admin apenas). Inclui usuários com e sem player vinculado. */
+export async function listAllUsers(): Promise<UserInfo[]> {
+  const rows = await sql`
+    SELECT u.id, u.login, u.role, u.player_id, p.player_name
+    FROM users u
+    LEFT JOIN players p ON p.id = u.player_id
+    ORDER BY u.login
+  `;
+  return (rows as any[]).map((r) => ({
+    id: r.id,
+    login: r.login,
+    role: r.role as UserRole,
+    playerId: r.player_id ?? null,
+    playerName: r.player_name ?? undefined,
+  }));
+}
+
+/** Verifica se há sessão de admin em backup (impersonação ativa). */
+export async function hasImpersonationBackup(): Promise<boolean> {
+  const cookieStore = await cookies();
+  return !!cookieStore.get(IMPERSONATION_BACKUP_COOKIE)?.value;
+}
+
+/** Retorna AuthUser a partir do ID do usuário (para impersonação). */
+export async function getAuthUserById(userId: string): Promise<AuthUser | null> {
+  const rows = await sql`
+    SELECT id, login, role, player_id FROM users WHERE id = ${userId} LIMIT 1
+  `;
+  const row = (rows as any[])[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    login: row.login,
+    role: row.role as UserRole,
+    playerId: row.player_id ?? null,
+  };
+}
+
+/** Impersona um usuário: salva sessão atual em backup e define sessão do alvo. */
+export async function impersonateUser(targetUserId: string): Promise<boolean> {
+  const cookieStore = await cookies();
+  const currentToken = cookieStore.get(COOKIE_NAME)?.value;
+  if (!currentToken) return false;
+  const target = await getAuthUserById(targetUserId);
+  if (!target) return false;
+  const maxAge = JWT_EXPIRY_HOURS * 60 * 60;
+  cookieStore.set(IMPERSONATION_BACKUP_COOKIE, currentToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge,
+    path: "/",
+  });
+  await setSession(target);
+  return true;
+}
+
+/** Restaura a sessão do admin (sai da impersonação). */
+export async function exitImpersonation(): Promise<void> {
+  const cookieStore = await cookies();
+  const backupToken = cookieStore.get(IMPERSONATION_BACKUP_COOKIE)?.value;
+  if (!backupToken) return;
+  const maxAge = JWT_EXPIRY_HOURS * 60 * 60;
+  cookieStore.set(COOKIE_NAME, backupToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge,
+    path: "/",
+  });
+  cookieStore.delete(IMPERSONATION_BACKUP_COOKIE);
+}
+
+/** Atualiza a senha de qualquer usuário por ID. Apenas admin. */
+export async function updateUserPasswordById(
+  userId: string,
+  newPassword: string
+): Promise<void> {
+  if (!newPassword || newPassword.length < 4) {
+    throw new Error("Senha deve ter no mínimo 4 caracteres.");
+  }
+  const hash = await hashPassword(newPassword);
+  await sql`
+    UPDATE users SET password_hash = ${hash}, updated_at = now()
+    WHERE id = ${userId}
+  `;
 }

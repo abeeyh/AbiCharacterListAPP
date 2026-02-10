@@ -223,6 +223,36 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
     }
   };
 
+  const handleSetMainAlt = (charId: string, value: string) => {
+    setCharacters((prev) => {
+      const updated = prev.map((c) => {
+        if (c.id !== charId) {
+          if (value === "main") return { ...c, isMain: false, altNumber: undefined };
+          return c;
+        }
+        if (value === "main") return { ...c, isMain: true, altNumber: undefined };
+        if (value === "") return { ...c, isMain: undefined, altNumber: undefined };
+        const num = parseInt(value, 10);
+        return { ...c, isMain: false, altNumber: Number.isFinite(num) ? num : undefined };
+      });
+      return updated;
+    });
+  };
+
+  const getMainAltValue = (c: Personagem): string => {
+    if (c.isMain) return "main";
+    if (c.altNumber && c.altNumber >= 1) return String(c.altNumber);
+    return "";
+  };
+
+  const altOptions = Array.from(
+    { length: Math.max(0, characters.length - 1) },
+    (_, i) => i + 1
+  );
+  const editAltOptions = editForm.altNumber && !altOptions.includes(editForm.altNumber)
+    ? [...altOptions, editForm.altNumber].sort((a, b) => a - b)
+    : altOptions;
+
   const handleToggleSaved = (charId: string, type: "mythic" | "heroic") => {
     setCharacters((prev) =>
       prev.map((c) =>
@@ -383,6 +413,7 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
                 <TableRow bg="gray.800">
                   <TableColumnHeader minW="140px">Nome</TableColumnHeader>
                   <TableColumnHeader minW="100px">Realm</TableColumnHeader>
+                  <TableColumnHeader minW="70px">Main/Alt</TableColumnHeader>
                   <TableColumnHeader minW="60px">iLvl</TableColumnHeader>
                   <TableColumnHeader minW="120px">Classe</TableColumnHeader>
                   <TableColumnHeader minW="90px">Mythic</TableColumnHeader>
@@ -396,6 +427,28 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
                     <TableRow key={c.id} bg="gray.800/80">
                       <TableCell><Input size="xs" value={editForm.nome ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, nome: e.target.value }))} bg="gray.900" /></TableCell>
                       <TableCell><Input size="xs" value={editForm.realm ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, realm: e.target.value }))} bg="gray.900" /></TableCell>
+                      <TableCell>
+                        <NativeSelectRoot size="xs" w="80px">
+                          <NativeSelectField
+                            value={editForm.isMain ? "main" : (editForm.altNumber ? String(editForm.altNumber) : "")}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setEditForm((p) =>
+                                v === "main" ? { ...p, isMain: true, altNumber: undefined }
+                                : v === "" ? { ...p, isMain: undefined, altNumber: undefined }
+                                : { ...p, isMain: false, altNumber: parseInt(v, 10) }
+                              );
+                            }}
+                            bg="gray.900"
+                          >
+                            <option value="">—</option>
+                            <option value="main">Main</option>
+                            {editAltOptions.map((n) => (
+                              <option key={n} value={String(n)}>Alt {n}</option>
+                            ))}
+                          </NativeSelectField>
+                        </NativeSelectRoot>
+                      </TableCell>
                       <TableCell><Input size="xs" type="number" value={editForm.itemLevel ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, itemLevel: Number(e.target.value) || 0 }))} bg="gray.900" w="60px" /></TableCell>
                       <TableCell>
                         <NativeSelectRoot size="xs" w="100px">
@@ -438,6 +491,22 @@ export function MembroForm({ memberId, title, onSaved, allowedRoles }: MembroFor
                     <TableRow key={c.id} _hover={{ bg: "gray.800/50" }}>
                       <TableCell fontWeight="medium">{c.nome}</TableCell>
                       <TableCell>{c.realm}</TableCell>
+                      <TableCell>
+                        <NativeSelectRoot size="xs" w="80px">
+                          <NativeSelectField
+                            value={getMainAltValue(c)}
+                            onChange={(e) => handleSetMainAlt(c.id, e.target.value)}
+                            bg="gray.800"
+                            borderColor="gray.600"
+                          >
+                            <option value="">—</option>
+                            <option value="main">Main</option>
+                            {(c.altNumber && !altOptions.includes(c.altNumber) ? [...altOptions, c.altNumber].sort((a, b) => a - b) : altOptions).map((n) => (
+                              <option key={n} value={String(n)}>Alt {n}</option>
+                            ))}
+                          </NativeSelectField>
+                        </NativeSelectRoot>
+                      </TableCell>
                       <TableCell><Text color="blue.400">{Number(c.itemLevel).toFixed(0)}</Text></TableCell>
                       <TableCell>
                         <Flex align="center" gap={1}>

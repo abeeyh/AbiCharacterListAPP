@@ -8,15 +8,22 @@ import {
   Text,
 } from "@chakra-ui/react";
 import Link from "next/link";
-import { getSession, isGmOrAbove } from "@/lib/auth";
+import { getSession, isAdmin, isGmOrAbove } from "@/lib/auth";
 
-const menuItems = [
+const menuItems: Array<{
+  href: string;
+  title: string;
+  description: string;
+  icon: string;
+  role: string | null;
+  adminOnly?: boolean;
+}> = [
   {
     href: "/home/meu-perfil",
     title: "Meu perfil",
     description: "Gerencie seus personagens, senha e importe dados.",
     icon: "👤",
-    role: null as string | null,
+    role: null,
   },
   {
     href: "/home/adicionar-membro",
@@ -31,6 +38,14 @@ const menuItems = [
     description: "Edite membros e personagens salvos.",
     icon: "✏️",
     role: "admin" as string | null,
+  },
+  {
+    href: "/home/gerenciar-usuarios",
+    title: "Gerenciar usuários",
+    description: "Troque a senha de qualquer usuário.",
+    icon: "🔑",
+    role: "admin" as string | null,
+    adminOnly: true,
   },
   {
     href: "/home/minhas-composicoes",
@@ -64,7 +79,10 @@ const ROLE_LABELS: Record<string, string> = {
 export default async function HomePage() {
   const user = await getSession();
   const canManage = isGmOrAbove(user);
-  const visibleItems = menuItems.filter((item) => !item.role || canManage);
+  const visibleItems = menuItems.filter((item) => {
+    if (item.adminOnly) return user && isAdmin(user);
+    return !item.role || canManage;
+  });
   return (
     <Flex
       flex={1}

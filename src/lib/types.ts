@@ -9,6 +9,10 @@ export interface Personagem {
   realm: string;
   itemLevel: number;
   classe?: string;
+  /** true = personagem principal */
+  isMain?: boolean;
+  /** número do alt (1, 2, 3...) quando não é main */
+  altNumber?: number;
   saved_mythic?: boolean;
   saved_heroic?: boolean;
   vault?: { raids: unknown[] };
@@ -127,9 +131,11 @@ export function mergeAndValidateCharacters(
       (e) => normalized(e.nome) === normalized(nome) && normalized(e.realm) === normalized(realm)
     );
     if (idx >= 0) {
-      // já existe: preserva saved_mythic e saved_heroic, atualiza o resto
+      // já existe: preserva saved_mythic, saved_heroic, isMain e altNumber, atualiza o resto
       imported.saved_mythic = result[idx].saved_mythic;
       imported.saved_heroic = result[idx].saved_heroic;
+      imported.isMain = result[idx].isMain;
+      imported.altNumber = result[idx].altNumber;
       imported.id = result[idx].id;
       result[idx] = imported;
     } else {

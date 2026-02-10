@@ -12,6 +12,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogoutButton } from "@/components/logout-button";
+import { exitImpersonation } from "@/lib/actions";
+import { toaster } from "@/components/ui/toaster";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Administrador",
@@ -21,7 +23,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 type User = { login: string; role: string } | null;
 
-export function Header({ user }: { user: User }) {
+export function Header({ user, isImpersonating }: { user: User; isImpersonating?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const showBack = pathname !== "/" && pathname !== "/home";
@@ -77,6 +79,20 @@ export function Header({ user }: { user: User }) {
 
         {user ? (
           <HStack gap={3}>
+            {isImpersonating && (
+              <Button
+                size="sm"
+                variant="solid"
+                colorPalette="orange"
+                onClick={async () => {
+                  await exitImpersonation();
+                  toaster.create({ title: "Voltou para a conta do admin", type: "success" });
+                  window.location.href = "/home/gerenciar-usuarios";
+                }}
+              >
+                Voltar ao admin
+              </Button>
+            )}
             <Link href="/home/meu-perfil">
               <Button size="sm" variant="ghost" colorPalette="gray">
                 Meu perfil
@@ -84,6 +100,11 @@ export function Header({ user }: { user: User }) {
             </Link>
             <Text fontSize="sm" color="gray.400">
               {user.login}
+              {isImpersonating && (
+                <Text as="span" color="orange.400" ml={1}>
+                  (como este usuário)
+                </Text>
+              )}
             </Text>
             <Text
               as="span"

@@ -102,6 +102,7 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPlayerBySlot, setSelectedPlayerBySlot] = useState<Record<number, string>>({});
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const router = useRouter();
 
   const load = useCallback(async () => {
@@ -258,6 +259,34 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
     setSlots(next);
   };
 
+  const handleDragStart = (e: React.DragEvent, slotIndex: number) => {
+    e.dataTransfer.setData("text/plain", String(slotIndex));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent, slotIndex: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIndex(slotIndex);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, toIndex: number) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+    const fromIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
+    if (Number.isNaN(fromIndex) || fromIndex === toIndex) return;
+    const next = [...slots];
+    const a = next[fromIndex];
+    const b = next[toIndex];
+    next[fromIndex] = b;
+    next[toIndex] = a;
+    setSlots(next);
+  };
+
   const DangerIcon = () => (
     <Box w="32px" h="32px" flexShrink={0} color="red.500" lineHeight={0}>
       <svg viewBox="0 0 24 24" fill="currentColor" width={32} height={32}>
@@ -267,14 +296,14 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
   );
 
   const renderSlot = (slot: SlotChar | null, i: number) => {
-    if (slot) {
+    const isDropTarget = dragOverIndex === i;
+    const slotContent = slot ? (() => {
       const slotMember = members.find((m) => m.id === slot.memberId);
       const mainAlt = slotMember ? getMainAltLabel(slotMember, slot.char) : "";
       const color = (slot.char.classe && CLASS_COLORS[slot.char.classe]) || "#ccc";
       const hasClassIcon = slot.char.classe && CLASS_ICONS[slot.char.classe];
       return (
         <Flex
-          key={i}
           align="center"
           gap={2}
           {...SLOT_SIZE}
@@ -284,6 +313,10 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
           borderWidth="1px"
           borderColor="gray.700"
           overflow="hidden"
+          draggable
+          onDragStart={(e) => handleDragStart(e, i)}
+          cursor="grab"
+          _active={{ cursor: "grabbing" }}
         >
           {hasClassIcon ? (
             <Image
@@ -319,75 +352,89 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
           </Button>
         </Flex>
       );
-    }
-    const availMembers = availableMembersForSlot(i);
-    const selPlayerId = selectedPlayerBySlot[i] ?? "";
-    const selMember = members.find((m) => m.id === selPlayerId);
-    const charOptions = (selMember?.characters ?? []).filter(
-      (c) => selMember && isCharAvailableForSlot(i, selMember.id, c.id)
-    );
+    })() : (() => {
+      const availMembers = availableMembersForSlot(i);
+      const selPlayerId = selectedPlayerBySlot[i] ?? "";
+      const selMember = members.find((m) => m.id === selPlayerId);
+      const charOptions = (selMember?.characters ?? []).filter(
+        (c) => selMember && isCharAvailableForSlot(i, selMember.id, c.id)
+      );
+      return (
+        <Flex
+          align="center"
+          gap={2}
+          {...SLOT_SIZE}
+          px={3}
+          borderRadius="md"
+          bg="gray.800/60"
+          borderWidth="1px"
+          borderColor="gray.700"
+          borderStyle="dashed"
+          overflow="hidden"
+        >
+          <NativeSelectRoot flex={1} minW={0} size="sm">
+            <NativeSelectField
+              value={selPlayerId}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) {
+                  setSelectedPlayerBySlot((p) => {
+                    const next = { ...p };
+                    delete next[i];
+                    return next;
+                  });
+                } else {
+                  handleSelectPlayer(i, v);
+                }
+              }}
+              bg="transparent"
+              border="none"
+            >
+              <option value="">— Jogador —</option>
+              {availMembers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.playerName ?? m.realm ?? "Sem nome"}
+                </option>
+              ))}
+            </NativeSelectField>
+          </NativeSelectRoot>
+          <NativeSelectRoot flex={1} minW={0} size="sm" disabled={!selPlayerId}>
+            <NativeSelectField
+              value=""
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v && selPlayerId) {
+                  handleSelectChar(i, selPlayerId, v);
+                }
+              }}
+              bg="transparent"
+              border="none"
+            >
+              <option value="">— Personagem —</option>
+              {charOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.classe ?? "?"} — {selMember ? getMainAltLabel(selMember, c) : ""}
+                </option>
+              ))}
+            </NativeSelectField>
+          </NativeSelectRoot>
+        </Flex>
+      );
+    })();
 
     return (
-      <Flex
+      <Box
         key={i}
-        align="center"
-        gap={2}
-        {...SLOT_SIZE}
-        px={3}
+        onDragOver={(e) => handleDragOver(e, i)}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => handleDrop(e, i)}
+        borderWidth={isDropTarget ? "2px" : "0"}
+        borderColor="blue.400"
         borderRadius="md"
-        bg="gray.800/60"
-        borderWidth="1px"
-        borderColor="gray.700"
-        borderStyle="dashed"
-        overflow="hidden"
+        transition="border-color 0.15s"
       >
-        <NativeSelectRoot flex={1} minW={0} size="sm">
-          <NativeSelectField
-            value={selPlayerId}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (!v) {
-                setSelectedPlayerBySlot((p) => {
-                  const next = { ...p };
-                  delete next[i];
-                  return next;
-                });
-              } else {
-                handleSelectPlayer(i, v);
-              }
-            }}
-            bg="transparent"
-            border="none"
-          >
-            <option value="">— Jogador —</option>
-            {availMembers.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.playerName ?? m.realm ?? "Sem nome"}
-              </option>
-            ))}
-          </NativeSelectField>
-        </NativeSelectRoot>
-        <NativeSelectRoot flex={1} minW={0} size="sm" disabled={!selPlayerId}>
-          <NativeSelectField
-            value=""
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v && selPlayerId) {
-                handleSelectChar(i, selPlayerId, v);
-              }
-            }}
-            bg="transparent"
-            border="none"
-          >
-            <option value="">— Personagem —</option>
-            {charOptions.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.classe ?? "?"} — {selMember ? getMainAltLabel(selMember, c) : ""}
-              </option>
-            ))}
-          </NativeSelectField>
-        </NativeSelectRoot>
-      </Flex>
+        {slotContent}
+      </Box>
     );
   };
 

@@ -4,11 +4,13 @@
  * SUJEITO A PAULADA
  * ATENCIOSAMENTE A DIRETORIA
  */
+
 import { useEffect, useRef, useState } from "react";
 
-const SECRET = "turtlemoans";
+const SECRET = "hollywoodpurplefilter";
+const MAX_TYPED = 25;
 
-export function TurtleMoansEasterEgg() {
+export function HollywoodPurpleFilterEasterEgg() {
   const [visible, setVisible] = useState(false);
   const typedRef = useRef("");
 
@@ -16,8 +18,9 @@ export function TurtleMoansEasterEgg() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key?.toLowerCase();
       if (!key || key.length > 1) return;
-      typedRef.current = (typedRef.current + key).slice(-SECRET.length);
-      if (typedRef.current === SECRET) {
+      typedRef.current = (typedRef.current + key).slice(-MAX_TYPED);
+      const normalized = typedRef.current.replace(/\s/g, "");
+      if (normalized.endsWith(SECRET) || normalized === SECRET) {
         setVisible((v) => !v);
         typedRef.current = "";
       }
@@ -31,7 +34,7 @@ export function TurtleMoansEasterEgg() {
   return (
     <div
       role="dialog"
-      aria-label="Turtle Moans"
+      aria-label="Hollywood Purple Filter"
       onClick={() => setVisible(false)}
       style={{
         position: "fixed",
@@ -40,25 +43,25 @@ export function TurtleMoansEasterEgg() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "rgba(0,0,0,0.85)",
+        background: "rgba(0,0,0,0.9)",
         cursor: "pointer",
       }}
     >
       <img
-        src="/turtlemoans.png"
-        alt="🐢"
+        src="/hollywood-purple-filter.png"
+        alt="Hollywood Purple Filter"
         onClick={(e) => e.stopPropagation()}
         style={{
           maxWidth: "90vw",
           maxHeight: "90vh",
           objectFit: "contain",
-          animation: "turtlemoans-pulse 0.8s ease-in-out infinite alternate",
+          animation: "hpf-pulse 0.8s ease-in-out infinite alternate",
         }}
       />
       <style>{`
-        @keyframes turtlemoans-pulse {
-          from { transform: scale(0.95); }
-          to { transform: scale(1.05); }
+        @keyframes hpf-pulse {
+          from { transform: scale(0.96); }
+          to { transform: scale(1.04); }
         }
       `}</style>
     </div>

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession, isAdmin, isGmOrAbove } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import { hasMasterCookie } from "@/lib/auth";
 import { AdminMasterGate } from "@/components/admin-master-gate";
 
@@ -9,10 +9,8 @@ export default async function Layout({
   children: React.ReactNode;
 }) {
   const user = await getSession();
-  if (!isGmOrAbove(user)) redirect("/home");
-  if (isAdmin(user)) {
-    const hasMaster = await hasMasterCookie();
-    if (!hasMaster) return <AdminMasterGate />;
-  }
+  if (!user || !isAdmin(user)) redirect("/home");
+  const hasMaster = await hasMasterCookie();
+  if (!hasMaster) return <AdminMasterGate />;
   return <>{children}</>;
 }

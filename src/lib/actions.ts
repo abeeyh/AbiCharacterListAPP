@@ -6,6 +6,15 @@ import {
   createOrUpdateUserForPlayer,
   updatePlayerUserRole,
   getPlayerUserRole,
+  verifyMasterPassword as authVerifyMaster,
+  hasMasterCookie,
+  setMasterCookie,
+  listAllUsers as authListUsers,
+  updateUserPasswordById as authUpdateUserPassword,
+  impersonateUser as authImpersonateUser,
+  exitImpersonation as authExitImpersonation,
+  hasImpersonationBackup,
+  isAdmin,
 } from "./auth";
 import type { UserRole } from "./auth";
 import {
@@ -31,6 +40,70 @@ async function requireSession(): Promise<void> {
 export async function getCurrentUserRole(): Promise<UserRole | null> {
   const session = await getSession();
   return session?.role ?? null;
+}
+
+// --- Senha mestra (admin) ---
+
+/** Verifica se o admin precisa digitar a senha mestra. */
+export async function needsMasterPassword(): Promise<boolean> {
+  const session = await getSession();
+  if (!session || !isAdmin(session)) return false;
+  const ok = await hasMasterCookie();
+  return !ok;
+}
+
+/** Valida a senha mestra e define o cookie em caso de sucesso. */
+export async function verifyMasterPassword(password: string): Promise<boolean> {
+  const session = await getSession();
+  if (!session || !isAdmin(session)) return false;
+  if (!authVerifyMaster(password)) return false;
+  await setMasterCookie();
+  return true;
+}
+
+// --- Gerenciar usuários (admin) ---
+
+/** Lista todos os usuários. Apenas admin. Retorna também o ID do usuário logado. */
+export async function getUsers(): Promise<{
+  users: { id: string; login: string; role: UserRole; playerId: string | null; playerName?: string }[];
+  currentUserId: string | null;
+}> {
+  const session = await getSession();
+  if (!session) redirect("/");
+  if (!isAdmin(session)) redirect("/home");
+  const users = await authListUsers();
+  return { users, currentUserId: session.id };
+}
+
+/** Atualiza a senha de um usuário. Apenas admin. */
+export async function updateUserPassword(
+  userId: string,
+  newPassword: string
+): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/");
+  if (!isAdmin(session)) redirect("/home");
+  await authUpdateUserPassword(userId, newPassword);
+}
+
+/** Impersona um usuário (logar como). Apenas admin com senha mestra. */
+export async function impersonateUser(targetUserId: string): Promise<boolean> {
+  const session = await getSession();
+  if (!session) redirect("/");
+  if (!isAdmin(session)) redirect("/home");
+  const hasMaster = await hasMasterCookie();
+  if (!hasMaster) return false;
+  return authImpersonateUser(targetUserId);
+}
+
+/** Sai da impersonação e volta para a conta do admin. */
+export async function exitImpersonation(): Promise<void> {
+  await authExitImpersonation();
+}
+
+/** Verifica se está em modo impersonação. */
+export async function isImpersonating(): Promise<boolean> {
+  return hasImpersonationBackup();
 }
 
 // --- Players ---
