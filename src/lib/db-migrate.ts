@@ -1,46 +1,51 @@
 /**
- * Script para rodar a migration do schema no Neon.
+ * Script para criar índices no MongoDB.
  * Execute: npm run db:migrate (carrega .env.local automaticamente)
  */
 import { config } from "dotenv";
 import { resolve } from "path";
 config({ path: resolve(process.cwd(), ".env.local") });
-import { neon } from "@neondatabase/serverless";
-import { readFileSync } from "fs";
-import { join } from "path";
 
-const databaseUrl = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
-if (!databaseUrl) {
-  console.error("DATABASE_URL ou DATABASE_URL_UNPOOLED não definida. Configure .env.local");
+import { MongoClient } from "mongodb";
+
+const mongoUri = process.env.MONGODB_URI;
+if (!mongoUri) {
+  console.error("MONGODB_URI não definida. Configure .env.local");
   process.exit(1);
 }
-
-const sql = neon(databaseUrl);
+const uri = mongoUri;
 
 async function migrate() {
-  const schemaPath = join(process.cwd(), "src", "lib", "db-schema.sql");
-  const schema = readFileSync(schemaPath, "utf-8");
-  const cleanSchema = schema
-    .split("\n")
-    .filter((line) => !line.trim().startsWith("--"))
-    .join("\n")
-    .trim();
-  // Split por ";\n" para obter statements completos
-  const statements = cleanSchema
-    .split(/;\s*\n/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  for (let i = 0; i < statements.length; i++) {
-    const stmt = statements[i] + ";";
-    try {
-      await sql.query(stmt, []);
-      console.log(`OK (${i + 1}/${statements.length}):`, stmt.slice(0, 50) + "...");
-    } catch (e) {
-      console.error(`Erro no statement ${i + 1}:`, stmt.slice(0, 80), e);
-      throw e;
-    }
-  }
-  console.log("Migration concluída.");
+  const client = new MongoClient(uri);
+  await client.connect();
+  const db = client.db();
+
+  // Índices para players
+  await db.collection("players").createIndex({ id: 1 }, { unique: true });
+  await db.collection("players").createIndex({ player_name: 1 });
+
+  // Índices para characters
+  await db.collection("characters").createIndex({ id: 1 }, { unique: true });
+  await db.collection("characters").createIndex({ player_id: 1 });
+
+  // Índices para compositions
+  await db.collection("compositions").createIndex({ id: 1 }, { unique: true });
+  await db.collection("compositions").createIndex({ name: 1 });
+
+  // Índices para composition_slots
+  await db.collection("composition_slots").createIndex({ composition_id: 1 });
+  await db.collection("composition_slots").createIndex(
+    { composition_id: 1, slot_index: 1 },
+    { unique: true }
+  );
+
+  // Índices para users
+  await db.collection("users").createIndex({ id: 1 }, { unique: true });
+  await db.collection("users").createIndex({ login: 1 }, { unique: true });
+  await db.collection("users").createIndex({ player_id: 1 });
+
+  await client.close();
+  console.log("Migração (índices) concluída.");
 }
 
 migrate().catch((e) => {

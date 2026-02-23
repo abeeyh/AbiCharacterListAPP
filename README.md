@@ -35,5 +35,5 @@ Consulte **[DEPLOY.md](./DEPLOY.md)** para instruções completas. Em resumo:
 
 1. Conecte o repositório no Vercel
 2. Defina **Root Directory** como `next-app`
-3. Configure as variáveis `DATABASE_URL` e `ABI_JWT_SECRET`
+3. Configure as variáveis `MONGODB_URI` e `ABI_JWT_SECRET`
 4. Execute as migrations localmente antes do primeiro deploy

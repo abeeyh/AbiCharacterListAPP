@@ -17,7 +17,7 @@ import {
 import Image from "next/image";
 import NextLink from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getMembers,
   getCompositions,
@@ -78,6 +78,11 @@ const CLASS_COLORS: Record<string, string> = {
   "Death Knight": "#C41E3A",
 };
 
+const CLASS_NAMES = [
+  "Warrior", "Paladin", "Hunter", "Rogue", "Priest", "Shaman", "Mage", "Warlock",
+  "Monk", "Druid", "Demon Hunter", "Death Knight", "Evoker",
+] as const;
+
 interface MontarComposicaoProps {
   compositionId?: string;
   title?: string;
@@ -94,7 +99,9 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPlayerBySlot, setSelectedPlayerBySlot] = useState<Record<number, string>>({});
+  const [slotClassByIndex, setSlotClassByIndex] = useState<Record<number, string>>({});
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const draggedClassRef = useRef<string | null>(null);
   const router = useRouter();
 
   const load = useCallback(async () => {
@@ -141,6 +148,7 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
     }
     setSaveSuccess(false);
     setSelectedPlayerBySlot({});
+    setSlotClassByIndex({});
   }, [compositionId]);
 
   useEffect(() => {
@@ -185,7 +193,7 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
     return true;
   };
 
-  const availableMembersForSlot = (excludeSlotIndex: number) => {
+  const availableMembersForSlot = (excludeSlotIndex: number, classeFilter?: string) => {
     const usedMemberIds = new Set<string>();
     for (let i = 0; i < slots.length; i++) {
       if (i === excludeSlotIndex) continue;
@@ -197,7 +205,11 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
     }
     return members.filter((m) => {
       if (usedMemberIds.has(m.id)) return false;
-      return (m.characters ?? []).some((c) => isCharAvailableForSlot(excludeSlotIndex, m.id, c.id));
+      const chars = (m.characters ?? []).filter((c) => {
+        if (classeFilter && (c.classe ?? "") !== classeFilter) return false;
+        return isCharAvailableForSlot(excludeSlotIndex, m.id, c.id);
+      });
+      return chars.length > 0;
     });
   };
 
@@ -276,6 +288,11 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
       saved: isHeroic ? usedInOtherCompSameType : false,
     };
     setSlots(next);
+    setSlotClassByIndex((prev) => {
+      const p = { ...prev };
+      delete p[slotIndex];
+      return p;
+    });
     setSelectedPlayerBySlot((prev) => {
       const p = { ...prev };
       delete p[slotIndex];
@@ -301,6 +318,16 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
     const next = [...slots];
     next[slotIndex] = null;
     setSlots(next);
+    setSlotClassByIndex((prev) => {
+      const p = { ...prev };
+      delete p[slotIndex];
+      return p;
+    });
+    setSelectedPlayerBySlot((prev) => {
+      const p = { ...prev };
+      delete p[slotIndex];
+      return p;
+    });
   };
 
   const handleDragStart = (e: React.DragEvent, slotIndex: number) => {
@@ -310,6 +337,7 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
 
   const handleDragOver = (e: React.DragEvent, slotIndex: number) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
     setDragOverIndex(slotIndex);
   };
@@ -318,10 +346,31 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
     setDragOverIndex(null);
   };
 
+  const handleClassDragStart = (e: React.DragEvent, classe: string) => {
+    draggedClassRef.current = classe;
+    e.dataTransfer.setData("text/plain", `class:${classe}`);
+    e.dataTransfer.effectAllowed = "copyMove";
+  };
+
+  const handleClassDragEnd = () => {
+    draggedClassRef.current = null;
+  };
+
   const handleDrop = (e: React.DragEvent, toIndex: number) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverIndex(null);
-    const fromIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
+
+    const draggedClass = draggedClassRef.current;
+    if (draggedClass && slots[toIndex] == null) {
+      setSlotClassByIndex((prev) => ({ ...prev, [toIndex]: draggedClass }));
+      draggedClassRef.current = null;
+      return;
+    }
+
+    const data = e.dataTransfer.getData("text/plain");
+    if (data?.startsWith("class:")) return;
+    const fromIndex = parseInt(data, 10);
     if (Number.isNaN(fromIndex) || fromIndex === toIndex) return;
     const next = [...slots];
     const a = next[fromIndex];
@@ -396,12 +445,43 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
         </Flex>
       );
     })() : (() => {
-      const availMembers = availableMembersForSlot(i);
+      const slotClasse = slotClassByIndex[i];
+      const availMembers = availableMembersForSlot(i, slotClasse);
       const selPlayerId = selectedPlayerBySlot[i] ?? "";
       const selMember = members.find((m) => m.id === selPlayerId);
-      const charOptions = (selMember?.characters ?? []).filter(
+      const baseCharOptions = (selMember?.characters ?? []).filter(
         (c) => selMember && isCharAvailableForSlot(i, selMember.id, c.id)
       );
+      const charOptions = slotClasse
+        ? baseCharOptions.filter((c) => (c.classe ?? "") === slotClasse)
+        : baseCharOptions;
+
+      if (!slotClasse) {
+        return (
+          <Flex
+            align="center"
+            justify="center"
+            {...SLOT_SIZE}
+            px={3}
+            borderRadius="md"
+            bg="gray.800/40"
+            borderWidth="1px"
+            borderColor="gray.600"
+            borderStyle="dashed"
+            overflow="hidden"
+            w="full"
+            h="full"
+            minH="52px"
+          >
+            <Text fontSize="xs" color="gray.500" pointerEvents="none">
+              Arraste uma classe aqui
+            </Text>
+          </Flex>
+        );
+      }
+
+      const color = CLASS_COLORS[slotClasse] ?? "#ccc";
+      const hasClassIcon = CLASS_ICONS[slotClasse];
       return (
         <Flex
           align="center"
@@ -415,6 +495,29 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
           borderStyle="dashed"
           overflow="hidden"
         >
+          <Flex
+            align="center"
+            justify="center"
+            w="40px"
+            h="36px"
+            borderRadius="md"
+            bg={`${color}20`}
+            flexShrink={0}
+            cursor="default"
+            title={slotClasse}
+          >
+            {hasClassIcon ? (
+              <Image
+                src={CLASS_ICONS[slotClasse]}
+                alt={slotClasse}
+                width={28}
+                height={28}
+                style={{ borderRadius: 4 }}
+              />
+            ) : (
+              <Text fontSize="xs" fontWeight="600" style={{ color }}>{slotClasse.slice(0, 2)}</Text>
+            )}
+          </Flex>
           <NativeSelectRoot flex={1} minW={0} size="sm">
             <NativeSelectField
               value={selPlayerId}
@@ -458,12 +561,32 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
                 const mainAltLabel = getMainAltLabel(c);
                 return (
                   <option key={c.id} value={c.id}>
-                    {c.classe ?? "?"}{mainAltLabel ? ` — ${mainAltLabel}` : ""}
+                    {c.nome}{mainAltLabel ? ` — ${mainAltLabel}` : ""}
                   </option>
                 );
               })}
             </NativeSelectField>
           </NativeSelectRoot>
+          <Button
+            size="xs"
+            variant="ghost"
+            colorPalette="gray"
+            onClick={() => {
+              setSlotClassByIndex((p) => {
+                const next = { ...p };
+                delete next[i];
+                return next;
+              });
+              setSelectedPlayerBySlot((p) => {
+                const next = { ...p };
+                delete next[i];
+                return next;
+              });
+            }}
+            title="Remover classe"
+          >
+            ✕
+          </Button>
         </Flex>
       );
     })();
@@ -483,6 +606,58 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
       </Box>
     );
   };
+
+  const ClassPickerRow = () => (
+    <Flex
+      gap={2}
+      p={2}
+      borderRadius="md"
+      bg="gray.800"
+      borderWidth="1px"
+      borderColor="gray.700"
+      flexWrap="wrap"
+      align="center"
+    >
+      <Text fontSize="xs" fontWeight="600" color="gray.500" mr={1}>
+        Arraste a classe para o slot:
+      </Text>
+      {CLASS_NAMES.map((classe) => {
+        const color = CLASS_COLORS[classe] ?? "#888";
+        const icon = CLASS_ICONS[classe];
+        return (
+          <Flex
+            key={classe}
+            align="center"
+            justify="center"
+            w="36px"
+            h="36px"
+            borderRadius="md"
+            bg={`${color}25`}
+            borderWidth="1px"
+            borderColor={`${color}60`}
+            draggable
+            onDragStart={(e) => handleClassDragStart(e, classe)}
+            onDragEnd={handleClassDragEnd}
+            cursor="grab"
+            _active={{ cursor: "grabbing" }}
+            title={classe}
+          >
+            {icon ? (
+              <Image
+                src={icon}
+                alt={classe}
+                width={28}
+                height={28}
+                style={{ borderRadius: 4, pointerEvents: "none" }}
+              />
+            ) : (
+              <Text fontSize="xs" fontWeight="600" style={{ color }}>{classe.slice(0, 2)}</Text>
+            )}
+          </Flex>
+        );
+      })}
+    </Flex>
+  );
 
   const Group = ({ label, startIdx }: { label: string; startIdx: number }) => (
     <Box>
@@ -693,6 +868,7 @@ export function MontarComposicao({ compositionId, title = "Montar composição" 
           </Box>
         ) : (
           <>
+            <ClassPickerRow />
             <Flex gap={6} w="full" align="flex-start" flexWrap="wrap" flexDirection={{ base: "column", lg: "row" }}>
               <SimpleGrid columns={{ base: 1, md: 2 }} gap={6} flex={1} minW={0}>
                 <Group label="Grupo 1" startIdx={0} />

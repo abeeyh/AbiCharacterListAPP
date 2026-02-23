@@ -4,7 +4,7 @@
  * Apenas server-side.
  */
 import { SignJWT, jwtVerify } from "jose";
-import { sql } from "./db";
+import { getDb } from "./db";
 import * as bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { generateId } from "./types";
@@ -43,33 +43,38 @@ export async function validateLogin(
   login: string,
   password: string
 ): Promise<AuthUser | null> {
-  const rows = await sql`
-    SELECT id, login, password_hash, role, player_id
-    FROM users
-    WHERE LOWER(TRIM(login)) = LOWER(TRIM(${login}))
-    LIMIT 1
-  `;
-  const row = (rows as any[])[0];
-  if (!row) return null;
-  const ok = await bcrypt.compare(password, row.password_hash);
+  const database = await getDb();
+  const users = database.collection("users");
+  const normalizedLogin = login.trim().toLowerCase();
+
+  const user = await users.findOne({
+    login: { $regex: new RegExp(`^${escapeRegex(normalizedLogin)}$`, "i") },
+  });
+
+  if (!user) return null;
+  const row = user as unknown as Record<string, unknown>;
+  const ok = await bcrypt.compare(password, row.password_hash as string);
   if (!ok) return null;
   return {
-    id: row.id,
-    login: row.login,
+    id: row.id as string,
+    login: row.login as string,
     role: row.role as UserRole,
-    playerId: row.player_id ?? null,
+    playerId: (row.player_id ?? null) as string | null,
   };
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export async function setSession(user: AuthUser): Promise<void> {
   const secret = getJwtSecret();
   const exp = getExpiryDate();
-  // Payload: id do usuário, id do jogador (playerId), permissão (role)
   const token = await new SignJWT({
     id: user.id,
     login: user.login,
-    playerId: user.playerId, // id do jogador (players.id)
-    role: user.role,         // permissão: admin | gm | jogador
+    playerId: user.playerId,
+    role: user.role,
   })
     .setProtectedHeader({ alg: JWT_ALG })
     .setExpirationTime(exp)
@@ -104,8 +109,7 @@ export async function getSession(): Promise<AuthUser | null> {
       };
     }
   } catch {
-    // JWT expirado ou inválido: não modificar cookie aqui (só permitido em Server Action/Route Handler).
-    // Retorna null; no próximo login setSession sobrescreve o cookie.
+    // JWT expirado ou inválido
   }
   return null;
 }
@@ -127,10 +131,19 @@ export async function createUser(
 ): Promise<AuthUser> {
   const id = generateId();
   const hash = await hashPassword(password);
-  await sql`
-    INSERT INTO users (id, login, password_hash, role, player_id, updated_at)
-    VALUES (${id}, ${login.trim()}, ${hash}, ${role}, ${playerId ?? null}, now())
-  `;
+  const database = await getDb();
+  const users = database.collection("users");
+
+  await users.insertOne({
+    id,
+    login: login.trim(),
+    password_hash: hash,
+    role,
+    player_id: playerId ?? null,
+    created_at: new Date(),
+    updated_at: new Date(),
+  });
+
   return {
     id,
     login: login.trim(),
@@ -143,11 +156,12 @@ export async function createUser(
 export async function getPlayerUserRole(
   playerId: string
 ): Promise<UserRole | null> {
-  const rows = await sql`
-    SELECT role FROM users WHERE player_id = ${playerId} LIMIT 1
-  `;
-  const row = (rows as any[])[0];
-  return row?.role ?? null;
+  const database = await getDb();
+  const users = database.collection("users");
+  const user = await users.findOne({ player_id: playerId });
+  if (!user) return null;
+  const row = user as unknown as Record<string, unknown>;
+  return (row.role as UserRole) ?? null;
 }
 
 /** Atualiza apenas o role do usuário vinculado ao player. */
@@ -155,10 +169,12 @@ export async function updatePlayerUserRole(
   playerId: string,
   role: UserRole
 ): Promise<void> {
-  await sql`
-    UPDATE users SET role = ${role}, updated_at = now()
-    WHERE player_id = ${playerId}
-  `;
+  const database = await getDb();
+  const users = database.collection("users");
+  await users.updateOne(
+    { player_id: playerId },
+    { $set: { role, updated_at: new Date() } }
+  );
 }
 
 /** Cria ou atualiza usuário vinculado ao player. Login = nome do jogador. Role = cargo (default jogador). */
@@ -171,21 +187,33 @@ export async function createOrUpdateUserForPlayer(
   const trimmedLogin = login.trim();
   if (!trimmedLogin || !password) return;
   const hash = await hashPassword(password);
-  const existing = await sql`
-    SELECT id FROM users WHERE player_id = ${playerId} LIMIT 1
-  `;
-  const row = (existing as any[])[0];
-  if (row) {
-    await sql`
-      UPDATE users SET login = ${trimmedLogin}, password_hash = ${hash}, role = ${role}, updated_at = now()
-      WHERE player_id = ${playerId}
-    `;
+  const database = await getDb();
+  const users = database.collection("users");
+
+  const existing = await users.findOne({ player_id: playerId });
+  if (existing) {
+    await users.updateOne(
+      { player_id: playerId },
+      {
+        $set: {
+          login: trimmedLogin,
+          password_hash: hash,
+          role,
+          updated_at: new Date(),
+        },
+      }
+    );
   } else {
     const id = generateId();
-    await sql`
-      INSERT INTO users (id, login, password_hash, role, player_id, updated_at)
-      VALUES (${id}, ${trimmedLogin}, ${hash}, ${role}, ${playerId}, now())
-    `;
+    await users.insertOne({
+      id,
+      login: trimmedLogin,
+      password_hash: hash,
+      role,
+      player_id: playerId,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
   }
 }
 
@@ -203,7 +231,6 @@ export function isGmOrAbove(user: AuthUser | null): boolean {
 }
 
 // Senha mestra: hardcoded, usada apenas como 2º fator para acessar páginas admin.
-// A senha do admin para login continua no banco (users.password_hash).
 const MASTER_PASSWORD = "abi2admin";
 const MASTER_COOKIE = "abi-master-ok";
 const MASTER_COOKIE_MAX_AGE = 8 * 60 * 60; // 8 horas
@@ -242,19 +269,31 @@ export interface UserInfo {
 
 /** Lista todos os usuários (admin apenas). Inclui usuários com e sem player vinculado. */
 export async function listAllUsers(): Promise<UserInfo[]> {
-  const rows = await sql`
-    SELECT u.id, u.login, u.role, u.player_id, p.player_name
-    FROM users u
-    LEFT JOIN players p ON p.id = u.player_id
-    ORDER BY u.login
-  `;
-  return (rows as any[]).map((r) => ({
-    id: r.id,
-    login: r.login,
-    role: r.role as UserRole,
-    playerId: r.player_id ?? null,
-    playerName: r.player_name ?? undefined,
-  }));
+  const database = await getDb();
+  const users = database.collection("users");
+  const players = database.collection("players");
+
+  const list = await users.find({}).sort({ login: 1 }).toArray();
+  const result: UserInfo[] = [];
+
+  for (const u of list) {
+    const row = u as unknown as Record<string, unknown>;
+    let playerName: string | undefined;
+    if (row.player_id) {
+      const p = await players.findOne({ id: row.player_id });
+      if (p) {
+        playerName = (p as unknown as Record<string, unknown>).player_name as string;
+      }
+    }
+    result.push({
+      id: row.id as string,
+      login: row.login as string,
+      role: row.role as UserRole,
+      playerId: (row.player_id ?? null) as string | null,
+      playerName,
+    });
+  }
+  return result;
 }
 
 /** Verifica se há sessão de admin em backup (impersonação ativa). */
@@ -265,16 +304,16 @@ export async function hasImpersonationBackup(): Promise<boolean> {
 
 /** Retorna AuthUser a partir do ID do usuário (para impersonação). */
 export async function getAuthUserById(userId: string): Promise<AuthUser | null> {
-  const rows = await sql`
-    SELECT id, login, role, player_id FROM users WHERE id = ${userId} LIMIT 1
-  `;
-  const row = (rows as any[])[0];
-  if (!row) return null;
+  const database = await getDb();
+  const users = database.collection("users");
+  const user = await users.findOne({ id: userId });
+  if (!user) return null;
+  const row = user as unknown as Record<string, unknown>;
   return {
-    id: row.id,
-    login: row.login,
+    id: row.id as string,
+    login: row.login as string,
     role: row.role as UserRole,
-    playerId: row.player_id ?? null,
+    playerId: (row.player_id ?? null) as string | null,
   };
 }
 
@@ -322,8 +361,10 @@ export async function updateUserPasswordById(
     throw new Error("Senha deve ter no mínimo 4 caracteres.");
   }
   const hash = await hashPassword(newPassword);
-  await sql`
-    UPDATE users SET password_hash = ${hash}, updated_at = now()
-    WHERE id = ${userId}
-  `;
+  const database = await getDb();
+  const users = database.collection("users");
+  await users.updateOne(
+    { id: userId },
+    { $set: { password_hash: hash, updated_at: new Date() } }
+  );
 }
